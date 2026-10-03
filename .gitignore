@@ -54,3 +54,6 @@ Thumbs.db
 # Reference UI Mockups
 *humanoidth.ui/
 *humamnoidth.ui/
+.vercel
+.env*
+.neon
