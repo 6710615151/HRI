@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sensing Lab (spike)</title>
+  <style>
+    :root { --bg:#faf6f0; --fg:#1d2420; --muted:#5e6661; --ok:#28744b; --warn:#a06a00; --bad:#9c2e26; --card:#fff; --line:rgba(0,0,0,.12); }
+    body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; }
+    main { max-width:1100px; margin:0 auto; padding:16px; display:grid; gap:14px; grid-template-columns: minmax(0,1fr) 360px; }
+    @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+    h1 { font-size:18px; margin:0 0 4px; } p { margin:0; color:var(--muted); }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; }
+    #view { position:relative; } video, canvas.ov { width:100%; border-radius:8px; transform:scaleX(-1); display:block; }
+    canvas.ov { position:absolute; inset:0; pointer-events:none; }
+    table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; } td { padding:3px 4px; border-bottom:1px solid var(--line); }
+    td:first-child { color:var(--muted); } .ok{color:var(--ok);font-weight:600} .warn{color:var(--warn);font-weight:600} .bad{color:var(--bad);font-weight:600}
+    button { font:inherit; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:#fff; cursor:pointer; min-height:40px; }
+    canvas#trace { width:100%; height:110px; display:block; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card" id="view">
+      <h1>Sensing lab: what can this browser perceive here?</h1>
+      <p>On-device only. Nothing is uploaded or stored. Run this at the venue with the demo laptop.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
+        <button id="start">Start camera</button>
+        <button id="calib">Calibrate distance (sit at comfortable distance)</button>
+        <button id="mic">Start mic envelope</button>
+      </div>
+      <div style="position:relative"><video id="video" playsinline muted></video><canvas class="ov" id="ov"></canvas></div>
+      <canvas id="trace" width="700" height="110" aria-label="Breathing signal trace"></canvas>
+    </section>
+    <aside class="card">
+      <table id="tbl"><tbody></tbody></table>
+    </aside>
+  </main>
+  <script type="module">
+    import { createSensing, createMicEnvelope } from "./sensing.js";
+    import { BreathEstimator, shoulderBreathSignal, classifyWai, WaiDetector, Proximity, shoulderWidth, userArmDirections, armAngles, meanLuma } from "./signals.js";
+
+    const rows = {};
+    const tbody = document.querySelector("#tbl tbody");
+    const set = (k, v, cls = "") => {
+      if (!rows[k]) { const tr = document.createElement("tr"); tr.innerHTML = `<td>${k}</td><td></td>`; tbody.appendChild(tr); rows[k] = tr.children[1]; }
+      rows[k].textContent = v; rows[k].className = cls;
+    };
+    set("status", "idle");
+
+    const breath = new BreathEstimator(), micBreath = new BreathEstimator();
+    const wai = new WaiDetector(), prox = new Proximity();
+    let lastWidth = NaN, mic = null, trace = [];
+    const lumaCanvas = new OffscreenCanvas(64, 48), lumaCtx = lumaCanvas.getContext("2d", { willReadFrequently: true });
+
+    document.getElementById("start").onclick = async () => {
+      set("status", "loading models…");
+      const sensing = await createSensing({ pose: true, face: true, hands: false });
+      const video = document.getElementById("video");
+      await sensing.start(video);
+      const ov = document.getElementById("ov"), octx = ov.getContext("2d");
+      set("status", "running", "ok");
+      window.sensingStats = sensing.stats;
+      sensing.onFrame((out, stats) => {
+        const t = out.t / 1000;
+        ov.width = video.videoWidth; ov.height = video.videoHeight;
+        octx.clearRect(0, 0, ov.width, ov.height);
+        lumaCtx.drawImage(video, 0, 0, 64, 48);
+        const luma = meanLuma(lumaCtx.getImageData(0, 0, 64, 48).data, 1);
+        set("lighting (mean luma)", luma.toFixed(0), luma < 60 ? "bad" : luma < 90 ? "warn" : "ok");
+        set("fps / inference ms", `${stats.fps.toFixed(1)} / ${stats.inferMs.toFixed(1)}`, stats.fps < 15 ? "warn" : "ok");
+
+        const lm = out.pose?.landmarks?.[0], world = out.pose?.worldLandmarks?.[0];
+        set("person (pose)", lm ? "yes" : "no", lm ? "ok" : "warn");
+        if (!lm) for (const k of ["proximity ratio", "lean-back event", "wai (frame score)", "wai detector", "left arm elev/elbow°", "right arm elev/elbow°"]) if (rows[k]) set(k, "–");
+        if (lm) {
+          octx.fillStyle = "#19c37d";
+          for (const p of lm) if ((p.visibility ?? 1) > 0.5) octx.fillRect(p.x * ov.width - 3, p.y * ov.height - 3, 6, 6);
+          const w = shoulderWidth(lm); lastWidth = w;
+          const pr = prox.update(out.t, w);
+          set("proximity ratio", pr.ratio ?? "–", pr.leanBack ? "warn" : "");
+          set("lean-back event", pr.leanBack ? "YES" : "no", pr.leanBack ? "warn" : "");
+          const wf = classifyWai(lm), ws = wai.update(out.t, wf);
+          set("wai (frame score)", `${wf.score.toFixed(2)} gap ${wf.wristGap ?? "–"}`);
+          set("wai detector", ws.state, ws.state === "fired" ? "ok" : "");
+          const sig = shoulderBreathSignal(lm);
+          breath.push(t, sig);
+          trace.push(sig); if (trace.length > 300) trace.shift();
+          const be = breath.estimate();
+          set("breath (camera)", be.bpm ? `${be.bpm} bpm q=${be.quality}` : be.reason, be.bpm && be.quality >= 0.6 ? "ok" : "warn");
+          for (const side of ["left", "right"]) {
+            const a = armAngles(userArmDirections(world, side));
+            set(`${side} arm elev/elbow°`, a ? `${a.shoulderElevationDeg} / ${a.elbowDeg}` : "not visible", a ? "" : "warn");
+          }
+        }
+        const face = out.face?.faceLandmarks?.[0];
+        set("face", face ? "yes" : "no", face ? "ok" : "warn");
+        if (face) {
+          const nose = face[1];
+          set("face centre (x,y)", `${nose.x.toFixed(2)}, ${nose.y.toFixed(2)}`);
+          const iod = Math.hypot(face[33].x - face[263].x, face[33].y - face[263].y);
+          set("interocular (norm)", iod.toFixed(3));
+        }
+        if (mic) {
+          const v = mic.read(); micBreath.push(t, v);
+          const me = micBreath.estimate();
+          set("mic RMS", v.toFixed(4));
+          set("breath (mic)", me.bpm ? `${me.bpm} bpm q=${me.quality}` : me.reason, me.bpm && me.quality >= 0.6 ? "ok" : "warn");
+        }
+        // trace
+        const c = document.getElementById("trace"), x = c.getContext("2d");
+        x.clearRect(0, 0, c.width, c.height);
+        const finite = trace.filter(Number.isFinite);
+        if (finite.length > 2) {
+          const lo = Math.min(...finite), hi = Math.max(...finite), span = hi - lo || 1;
+          x.strokeStyle = "#28744b"; x.lineWidth = 2; x.beginPath();
+          trace.forEach((v, i) => { if (!Number.isFinite(v)) return; const px = (i / 300) * c.width, py = c.height - ((v - lo) / span) * (c.height - 10) - 5; i ? x.lineTo(px, py) : x.moveTo(px, py); });
+          x.stroke();
+        }
+      });
+    };
+    document.getElementById("calib").onclick = () => { if (Number.isFinite(lastWidth)) prox.calibrate(lastWidth); };
+    document.getElementById("mic").onclick = async () => { mic = await createMicEnvelope(); };
+  </script>
+</body>
+</html>

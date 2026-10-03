@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Behaviour Engine Sheet (spike)</title>
+  <script type="importmap">
+    { "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }
+  </script>
+  <style>body{margin:0;background:#faf6f0;font:12px system-ui}#stage{position:absolute;left:-9999px}</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <canvas id="sheet"></canvas>
+  <script type="module">
+    import { createStage } from "./stage.js";
+    import { RobotBehavior } from "./behavior-engine.js";
+    const W = 300, H = 400;
+    const stage = await createStage(document.getElementById("stage"), { width: W, height: H, preserveDrawingBuffer: true });
+    const events = [];
+    const robot = new RobotBehavior(stage, { onEvent: (e) => events.push(e) });
+    const cams = {
+      body: () => { stage.camera.position.set(0, 0.1, 8.2); stage.camera.lookAt(0, 0.05, 0); },
+      app:  () => { stage.camera.position.set(0, 0.45, 4.75); stage.camera.lookAt(0, 0.32, 0); },
+      face: () => { stage.camera.position.set(0, 1.5, 3.0); stage.camera.lookAt(0, 1.45, 0); },
+      chest: () => { stage.camera.position.set(0, 0.9, 3.4); stage.camera.lookAt(0, 0.75, 0); },
+      top: () => { stage.camera.position.set(0, 4.5, 1.6); stage.camera.lookAt(0, 0.7, 0.3); },
+      handR: () => { stage.scene.updateMatrixWorld(true); const p = stage.bone("Arm Hand.R_074").getWorldPosition(new stage.camera.position.constructor()); stage.camera.position.set(p.x, p.y, p.z + 2.2); stage.camera.lookAt(p); },
+      side: () => { stage.camera.position.set(6.5, 0.4, 3.2); stage.camera.lookAt(0, 0.1, 0); }
+    };
+    // shots: [{label, cam, run: (robot) => void, settle: seconds, at: seconds-into-gesture}]
+    window.sheet = async (title, shots, cols = 4) => {
+      const c = document.getElementById("sheet");
+      const rows = Math.ceil(shots.length / cols);
+      c.width = cols * W; c.height = rows * (H + 18) + 22;
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#faf6f0"; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.fillStyle = "#111"; ctx.font = "bold 14px system-ui"; ctx.fillText(title, 6, 16);
+      for (const [i, s] of shots.entries()) {
+        robot.reset(); robot.settle(0.05);
+        s.run(robot);
+        robot.settle(s.settle ?? 2.5);
+        (cams[s.cam ?? "body"])();
+        stage.render();
+        const x = (i % cols) * W, y = 22 + Math.floor(i / cols) * (H + 18);
+        ctx.drawImage(stage.renderer.domElement, x, y, W, H);
+        ctx.fillStyle = "#111"; ctx.font = "12px system-ui"; ctx.fillText(s.label, x + 6, y + H + 13);
+      }
+      return events.length;
+    };
+    window.robot = robot; window.stage = stage; window.ready = true;
+  </script>
+</body>
+</html>

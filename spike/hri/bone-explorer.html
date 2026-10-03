@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Bone Explorer (spike)</title>
+  <script type="importmap">
+    { "imports": {
+        "three": "./node_modules/three/build/three.module.js",
+        "three/addons/": "./node_modules/three/examples/jsm/"
+    } }
+  </script>
+  <style>
+    body { margin: 0; background: #faf6f0; font: 12px system-ui; }
+    #stage { width: 360px; height: 480px; position: absolute; left: -9999px; }
+    #sheet { display: block; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <canvas id="sheet"></canvas>
+  <script type="module">
+    import { createStage } from "./stage.js";
+    import { Box3, Vector3 } from "three";
+
+    const W = 300, H = 400;
+    const stage = await createStage(document.getElementById("stage"), { width: W, height: H, preserveDrawingBuffer: true });
+    const rest = new Map();
+    for (const [name, bone] of Object.entries(stage.bones)) {
+      rest.set(name, { q: bone.quaternion.clone(), p: bone.position.clone(), s: bone.scale.clone() });
+    }
+    const resetAll = () => {
+      for (const [name, bone] of Object.entries(stage.bones)) {
+        const r = rest.get(name);
+        bone.quaternion.copy(r.q); bone.position.copy(r.p); bone.scale.copy(r.s);
+      }
+    };
+
+    // Optional camera framing on a bone (for face/hand close-ups).
+    const frame = (boneName, distance, view = "front") => {
+      // Wider than RobotViewer's framing so both arms stay in shot during sweeps.
+      stage.camera.position.set(0, 0.1, 8.2);
+      stage.camera.lookAt(0, 0.05, 0);
+      if (!boneName) return;
+      stage.scene.updateMatrixWorld(true);
+      const p = new Vector3();
+      stage.bone(boneName).getWorldPosition(p);
+      if (view === "side") stage.camera.position.set(p.x + distance, p.y, p.z);
+      else stage.camera.position.set(p.x, p.y, p.z + distance);
+      stage.camera.lookAt(p);
+    };
+
+    // variants: [{label, apply(bones)}]
+    window.contactSheet = ({ title, variants, focus, distance = 1.2, view = "front", cols = 4 }) => {
+      const sheet = document.getElementById("sheet");
+      const rows = Math.ceil(variants.length / cols);
+      sheet.width = cols * W; sheet.height = rows * (H + 18) + 22;
+      const ctx = sheet.getContext("2d");
+      ctx.fillStyle = "#faf6f0"; ctx.fillRect(0, 0, sheet.width, sheet.height);
+      ctx.fillStyle = "#111"; ctx.font = "bold 14px system-ui"; ctx.fillText(title, 6, 16);
+      variants.forEach((v, i) => {
+        resetAll();
+        v.apply(stage.bones, stage);
+        frame(focus, distance, view);
+        stage.render();
+        const x = (i % cols) * W, y = 22 + Math.floor(i / cols) * (H + 18);
+        ctx.drawImage(stage.renderer.domElement, x, y, W, H);
+        ctx.fillStyle = "#111"; ctx.font = "12px system-ui"; ctx.fillText(v.label, x + 6, y + H + 13);
+      });
+      resetAll();
+      return true;
+    };
+
+    // Axis sweep for one bone: rest, ±x, ±y, ±z in bone-local space.
+    window.axisSweep = (boneName, angle = 0.7, opts = {}) => {
+      const axes = [["x", 1, 0, 0], ["y", 0, 1, 0], ["z", 0, 0, 1]];
+      const variants = [{ label: "rest", apply: () => {} }];
+      for (const [a, x, y, z] of axes) for (const sign of [1, -1]) {
+        variants.push({
+          label: `${sign > 0 ? "+" : "-"}${a} ${angle}`,
+          apply: () => stage.bone(boneName).rotateOnAxis(new Vector3(x, y, z), sign * angle)
+        });
+      }
+      return window.contactSheet({ title: `${boneName} local-axis sweep`, variants, ...opts });
+    };
+
+    window.stage = stage;
+    window.resetAll = resetAll;
+    window.ready = true;
+  </script>
+</body>
+</html>

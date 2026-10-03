@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HRI Concept Spike</title>
+  <script type="importmap">
+    { "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }
+  </script>
+  <style>
+    :root { --bg:#faf6f0; --fg:#1d2420; --muted:#5e6661; --accent:#28744b; --warn:#a06a00; --bad:#9c2e26; --card:#fff; --line:rgba(0,0,0,.12); }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui, "IBM Plex Sans Thai", sans-serif; }
+    header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    header h1 { font-size:17px; margin:0; } header small { color:var(--muted); }
+    .tabs { display:flex; gap:6px; flex-wrap:wrap; }
+    .tabs button[aria-selected="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+    main { display:grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap:14px; padding:14px 16px; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+    #stageWrap { position:relative; background:linear-gradient(#fff, #efe9df); border:1px solid var(--line); border-radius:12px; height:560px; overflow:hidden; }
+    #stage { position:absolute; inset:0; }
+    #bubble { position:absolute; left:16px; right:16px; top:12px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; font-size:16px; min-height:44px; box-shadow:0 6px 16px rgba(0,0,0,.06); }
+    #chip { position:absolute; left:16px; bottom:14px; background:#111c; color:#fff; border-radius:999px; padding:6px 12px; font-size:13px; font-weight:600; }
+    #camBox { position:absolute; right:12px; bottom:12px; width:150px; border-radius:8px; overflow:hidden; display:none; border:2px solid #fff; }
+    #camBox video { width:100%; transform:scaleX(-1); display:block; }
+    .panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; display:grid; gap:10px; align-content:start; }
+    .panel h2 { font-size:16px; margin:0; } .muted { color:var(--muted); font-size:13px; }
+    button { font:inherit; padding:9px 13px; border-radius:9px; border:1px solid var(--line); background:#fff; cursor:pointer; min-height:44px; }
+    button:focus-visible, select:focus-visible, input:focus-visible { outline:3px solid #19c37d; outline-offset:2px; }
+    button.big { font-size:17px; font-weight:600; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .card { border:1px solid var(--line); border-radius:10px; padding:10px; background:#fcfbf8; }
+    #log { height:150px; overflow:auto; font:12px ui-monospace, monospace; background:#111; color:#cfe; border-radius:8px; padding:8px; white-space:pre-wrap; }
+    canvas.chart { width:100%; height:140px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+    [hidden] { display:none !important; }
+    .tier { font-weight:700; } .t-strong{color:var(--accent)} .t-moderate{color:#2d6b9a} .t-weak{color:var(--warn)} .t-none{color:#666}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>HRI feasibility spike</h1>
+    <small>Prototype interactions only. Not a medical device; makes no health claims.</small>
+    <nav class="tabs" role="tablist" aria-label="Concepts">
+      <button role="tab" data-tab="A">A · Honest Body</button>
+      <button role="tab" data-tab="B">B · Pre-Exposure</button>
+      <button role="tab" data-tab="C">C · Breath</button>
+      <button role="tab" data-tab="D">D · Mirror</button>
+      <button role="tab" data-tab="E">E · Wai-First</button>
+    </nav>
+    <div class="row" style="margin-left:auto">
+      <label class="row"><input type="checkbox" id="camToggle" /> Camera (on-device)</label>
+      <label class="row"><input type="checkbox" id="ttsToggle" /> Voice</label>
+      <span id="camStatus" class="muted"></span>
+    </div>
+  </header>
+  <main>
+    <section>
+      <div id="stageWrap"><div id="stage"></div><div id="bubble" aria-live="polite">…</div><div id="chip">idle</div><div id="camBox"><video id="video" playsinline muted></video></div></div>
+    </section>
+    <section style="display:grid;gap:12px;align-content:start">
+      <!-- A -->
+      <div class="panel" data-panel="A">
+        <h2>A · Honest Body: the robot's body shows how strong the atlas evidence is</h2>
+        <p class="muted">Facts come from the atlas seed data (thailand_humanoid_atlas_seed_records.json, lib/seed-importer.ts). Pick one; the robot presents it; you rate how much you trust it.</p>
+        <div id="factList" class="row"></div>
+        <div id="evidence" class="card" hidden></div>
+        <div class="row" id="trustRow" hidden>
+          <span>Your trust in this claim:</span>
+          <input type="range" id="trust" min="1" max="7" value="4" aria-label="Trust 1 to 7" />
+          <span id="trustVal">4</span>
+          <button id="trustSubmit">Record</button>
+          <button id="showEvidence">Show evidence</button>
+        </div>
+        <div id="calib" class="muted"></div>
+      </div>
+      <!-- B -->
+      <div class="panel" data-panel="B" hidden>
+        <h2>B · Pre-Exposure Clinic: you set the pace</h2>
+        <p class="muted">The robot escalates one behaviour at a time and announces each one first. You stay in control.</p>
+        <div class="row">
+          <button class="big" id="bContinue">Continue ▶</button>
+          <button class="big" id="bClose">Too close</button>
+          <button class="big" id="bFast">Too fast</button>
+          <button class="big" id="bMuch">Too much ✋</button>
+        </div>
+        <div class="row"><span>Discomfort now (0–10):</span><input type="range" id="suds" min="0" max="10" value="3" aria-label="Discomfort 0 to 10" /><span id="sudsVal">3</span><button id="sudsRec">Record</button></div>
+        <div id="ladder" class="card muted"></div>
+      </div>
+      <!-- C -->
+      <div class="panel" data-panel="C" hidden>
+        <h2>C · Breath Co-Regulation: the robot matches, then slowly leads</h2>
+        <p class="muted">Measures only an interaction signal (estimated breaths per minute). Not a health measurement.</p>
+        <div class="row">
+          <label>Input <select id="cMode"><option value="manual">Manual: hold button / Space while breathing in</option><option value="camera">Camera: shoulder movement</option><option value="mic">Microphone loudness</option></select></label>
+          <button id="cStart">Start session</button><button id="cStop">Finish</button>
+        </div>
+        <button id="inhaleBtn" class="big" aria-label="Hold while breathing in">Hold while breathing in</button>
+        <canvas id="cChart" class="chart" width="600" height="140" aria-label="User and robot breathing rate"></canvas>
+        <div id="cResult" class="card muted">Not started.</div>
+      </div>
+      <!-- D -->
+      <div class="panel" data-panel="D" hidden>
+        <h2>D · Mirror interaction: the robot shows your other arm</h2>
+        <p class="muted">Prototype inspired by mirror-based rehabilitation interaction. No therapeutic claim.</p>
+        <div class="row">
+          <label>Moving arm <select id="dSide"><option value="left">my left</option><option value="right">my right</option></select></label>
+          <label class="row"><input type="checkbox" id="dCam" /> use camera</label>
+          <button id="dDemo">Robot demonstrates</button>
+        </div>
+        <label>Shoulder raise <input type="range" id="dElev" min="0" max="170" value="10" /> <span id="dElevVal">10°</span></label>
+        <label>Elbow bend <input type="range" id="dFlex" min="0" max="140" value="10" /> <span id="dFlexVal">10°</span></label>
+        <div id="dReps" class="card muted">Reps: 0</div>
+      </div>
+      <!-- E -->
+      <div class="panel" data-panel="E" hidden>
+        <h2>E · Wai-First Proxemics</h2>
+        <p class="muted">The robot waits for your wai, returns it, then learns your comfortable distance.</p>
+        <div class="row"><button class="big" id="eWai">I performed a wai 🙏</button><button id="eReset">Start again</button></div>
+        <div class="row">
+          <button class="big" id="eFar">Too far</button>
+          <button class="big" id="eOk">Comfortable</button>
+          <button class="big" id="eNear">Too close</button>
+        </div>
+        <div id="eState" class="card muted"></div>
+      </div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between"><h2>Interaction log</h2><button id="dl">Download JSON</button></div>
+        <div id="log" role="log"></div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import { createStage } from "./stage.js";
+    import { RobotBehavior } from "./behavior-engine.js";
+    import { BreathEstimator, shoulderBreathSignal, classifyWai, WaiDetector, Proximity, shoulderWidth, mirrorTherapyTarget, userArmDirections, armAngles } from "./signals.js";
+
+    // ---------------- stage + engine
+    const wrap = document.getElementById("stageWrap");
+    const stage = await createStage(document.getElementById("stage"), { width: wrap.clientWidth, height: wrap.clientHeight, preserveDrawingBuffer: true });
+    stage.camera.position.set(0, 0.35, 6.6); stage.camera.lookAt(0, 0.2, 0);
+    new ResizeObserver(() => stage.resize(wrap.clientWidth, wrap.clientHeight)).observe(wrap);
+    const log = [];
+    const logEl = document.getElementById("log");
+    const record = (e) => { log.push(e); logEl.textContent += JSON.stringify(e) + "\n"; logEl.scrollTop = logEl.scrollHeight; };
+    const robot = new RobotBehavior(stage, { onEvent: (e) => record({ src: "robot", tab: current, ...e }) });
+    const human = (type, detail = {}) => record({ src: "human", tab: current, t: +robot.time.toFixed(3), type, ...detail });
+    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) robot.setSpeed(0.5);
+
+    let last = performance.now();
+    const frame = (now) => { const dt = Math.min(0.05, (now - last) / 1000); last = now; robot.update(dt); tick?.(dt); stage.render(); requestAnimationFrame(frame); };
+    let tick = null;
+    requestAnimationFrame(frame);
+
+    const bubble = document.getElementById("bubble"), chip = document.getElementById("chip");
+    const say = (text, lang = "en-US") => {
+      bubble.textContent = text;
+      if (document.getElementById("ttsToggle").checked && "speechSynthesis" in window) {
+        speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang; u.rate = robot.state.speed < 1 ? 0.85 : 1; speechSynthesis.speak(u);
+      }
+    };
+    const setChip = (t) => (chip.textContent = t);
+
+    // ---------------- optional camera sensing (shared)
+    let sensing = null, latest = null;
+    const camStatus = document.getElementById("camStatus");
+    document.getElementById("camToggle").onchange = async (ev) => {
+      if (ev.target.checked) {
+        camStatus.textContent = "loading models…";
+        const { createSensing } = await import("./sensing.js");
+        sensing = await createSensing({ pose: true, face: true });
+        await sensing.start(document.getElementById("video"));
+        document.getElementById("camBox").style.display = "block";
+        sensing.onFrame((out, stats) => { latest = out; camStatus.textContent = `camera ${stats.fps.toFixed(0)} fps`; onSense?.(out); });
+        human("camera_on");
+      } else { sensing?.stop(); sensing = null; latest = null; document.getElementById("camBox").style.display = "none"; camStatus.textContent = ""; human("camera_off"); }
+    };
+    let onSense = null;
+    // Robot looks at the user's face when the camera is on (all concepts).
+    const faceGaze = (out) => {
+      const f = out.face?.faceLandmarks?.[0];
+      if (f && !robot.state.gazeLocked) robot.lookAt(-(f[1].x - 0.5) * 2.2, (f[1].y - 0.45) * 1.6);
+    };
+
+    // ---------------- tabs
+    let current = "A";
+    const concepts = {};
+    const show = (tab) => {
+      current = tab;
+      document.querySelectorAll("[role=tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === tab));
+      document.querySelectorAll("[data-panel]").forEach((p) => (p.hidden = p.dataset.panel !== tab));
+      robot.reset(); tick = null; onSense = faceGaze; robot.state.gazeLocked = false;
+      concepts[tab].enter();
+    };
+    document.querySelectorAll("[role=tab]").forEach((b) => (b.onclick = () => show(b.dataset.tab)));
+
+    // =============== A · HONEST BODY ===============
+    const atlas = await (await fetch("/thailand_humanoid_atlas_seed_records.json")).json();
+    const seedTs = await (await fetch("/lib/seed-importer.ts")).text();
+    const byName = (n) => atlas.find((r) => r.category === "robot_model" && r.canonical_name === n);
+    const triplet = (subj) => atlas.find((r) => r.category === "triplet_relation" && r.subject === subj);
+    const naoConf = Number(seedTs.match(/canonicalName: "NAO"[\s\S]*?statusConfidence: ([0-9.]+)/)?.[1]);
+    const naoDesc = seedTs.match(/canonicalName: "NAO"[\s\S]*?description: "([^"]+)"/)?.[1];
+    const facts = [
+      { claim: "Pinto robots are deployed in hospitals across Thailand.", conf: triplet("Pinto Robot")?.confidence, url: byName("Pinto Robot")?.url, excerpt: byName("Pinto Robot")?.evidence_excerpt, src: "triplet + robot_model (seed JSON)" },
+      { claim: "Ninja robot sends patient information directly to doctors.", conf: byName("Ninja Robot")?.confidence, url: byName("Ninja Robot")?.url, excerpt: byName("Ninja Robot")?.evidence_excerpt, src: "robot_model (seed JSON)" },
+      { claim: "Mr SAM outpatient robots are deployed in a Thai hospital.", conf: byName("Mr SAM outpatient service robot")?.confidence, url: byName("Mr SAM outpatient service robot")?.url, excerpt: byName("Mr SAM outpatient service robot")?.evidence_excerpt, src: "robot_model (seed JSON)" },
+      { claim: "NAO humanoids are used for education and HRI research in Thailand.", conf: naoConf, url: null, excerpt: naoDesc, src: "lib/seed-importer.ts (statusConfidence)" },
+      { claim: "Bumi humanoids work in Thai hospitals.", conf: null, url: null, excerpt: "The atlas has no record supporting this claim.", src: "no matching record" }
+    ];
+    const tierOf = (c) => (c == null ? "none" : c >= 0.85 ? "strong" : c >= 0.6 ? "moderate" : "weak");
+    const ratings = [];
+    let factIdx = null;
+    function presentFact(i) {
+      factIdx = i;
+      const f = facts[i], tier = tierOf(f.conf);
+      robot.reset(); robot.state.gazeLocked = true;
+      const confTxt = f.conf == null ? "no evidence" : f.conf.toFixed(2);
+      if (tier === "strong") {
+        // Open palm toward the listener + steady gaze + nod. (Not hands-on-hips: impolite in Thai etiquette.)
+        robot.moveArm("L", "relaxed"); robot.moveArm("R", "offer"); robot.lean("upright"); robot.expression("happy"); robot.setGlow(1, "teal"); robot.lookAt(0, 0); robot.nod(1);
+        say(`${f.claim} The evidence is strong.`);
+      } else if (tier === "moderate") {
+        robot.moveArm("R", "handOnChest"); robot.expression("neutral"); robot.setGlow(0.55, "blue"); robot.lean("upright");
+        robot.lookAt(0.55, 0.15); setTimeout(() => robot.lookAt(0, 0), 1200);
+        say(`${f.claim} There is some evidence, but it is not conclusive.`);
+      } else if (tier === "weak") {
+        robot.moveArm("L", "shrug"); robot.moveArm("R", "shrug"); robot.expression("concerned"); robot.setGlow(0.75, "amber");
+        robot.lean("back"); robot.lookAt(0.35, 0.45); robot.shakeHead(1);
+        say(`${f.claim} I'm not sure. The evidence is weak.`);
+      } else {
+        robot.moveArm("L", "relaxed"); robot.moveArm("R", "relaxed"); robot.expression("neutral"); robot.setGlow(0.4, "grey"); robot.lookAt(0, 0.2);
+        say(`I don't know. The atlas has no record about this.`);
+      }
+      setChip(`evidence: ${tier} (${confTxt})`);
+      document.getElementById("trustRow").hidden = false;
+      document.getElementById("evidence").hidden = true;
+      human("fact_presented", { fact: i, tier, conf: f.conf });
+    }
+    document.getElementById("trust").oninput = (e) => (document.getElementById("trustVal").textContent = e.target.value);
+    document.getElementById("trustSubmit").onclick = () => {
+      const f = facts[factIdx]; const trust = +document.getElementById("trust").value;
+      const target = f.conf ?? 0; const err = Math.abs((trust - 1) / 6 - target);
+      ratings.push({ fact: factIdx, trust, conf: f.conf, err });
+      human("trust_rating", { fact: factIdx, trust, conf: f.conf, calibrationError: +err.toFixed(3) });
+      const mean = ratings.reduce((a, r) => a + r.err, 0) / ratings.length;
+      document.getElementById("calib").textContent = `Ratings: ${ratings.length} · mean calibration gap ${(mean * 100).toFixed(0)} points (0 = your trust matched the evidence)`;
+    };
+    document.getElementById("showEvidence").onclick = () => {
+      const f = facts[factIdx]; const ev = document.getElementById("evidence");
+      ev.hidden = false;
+      ev.innerHTML = `<div class="tier t-${tierOf(f.conf)}">${tierOf(f.conf).toUpperCase()} · ${f.conf ?? "—"}</div><div>${f.excerpt ?? ""}</div><div class="muted">${f.src}${f.url ? ` · <a href="${f.url}" target="_blank" rel="noreferrer">source</a>` : ""}</div>`;
+      robot.moveArm("L", "point"); robot.lookAt(0.8, 0.1);
+      human("evidence_opened", { fact: factIdx });
+    };
+    const factList = document.getElementById("factList");
+    facts.forEach((f, i) => { const b = document.createElement("button"); b.textContent = f.claim.replace(/\.$/, ""); b.onclick = () => presentFact(i); factList.appendChild(b); });
+    concepts.A = { enter() { say("Pick a claim. I'll tell you what the atlas knows, and how sure it is."); setChip("A · ready"); }, present: presentFact };
+
+    // =============== B · PRE-EXPOSURE ===============
+    const ladder = [
+      { text: "First, I'd like to look at you.", act: () => { robot.lookAt(0, 0); robot.expression("happy"); } },
+      { text: "May I wave hello?", act: () => robot.wave("R", 2.4) },
+      { text: "I'm going to step a little closer.", act: () => robot.setDistance(Math.min(-0.6, bCap)) },
+      { text: "One more step closer.", act: () => robot.setDistance(Math.min(0.4, bCap)) },
+      { text: "I'm going to raise my hand.", act: () => robot.raiseHand("R") },
+      { text: "I'd like to reach toward you.", act: () => { robot.moveArm("R", "offer"); robot.lean("forward"); robot.setDistance(Math.min(1.0, bCap)); } }
+    ];
+    let bStep = -1, bTimer = null, bCap = 1.8, bPaused = false;
+    const ladderEl = document.getElementById("ladder");
+    const renderLadder = () => (ladderEl.innerHTML = ladder.map((s, i) => `${i === bStep ? "▶ " : i < bStep ? "✓ " : "· "}${i + 1}. ${s.text}`).join("<br>") + `<br><br>Speed ×${robot.state.speed.toFixed(2)} · comfort limit ${bCap < 1.8 ? bCap.toFixed(2) : "none yet"}`);
+    function bNext() {
+      if (bStep >= ladder.length - 1) { say("That's everything. Thank you for meeting me at your pace."); robot.moveArm("R", "rest"); robot.lean("upright"); robot.nod(1); setChip("B · complete"); return; }
+      bStep++; bPaused = false;
+      const s = ladder[bStep];
+      robot.setGlow(0.6, "teal"); robot.expression("happy");
+      say(`${s.text} (in 3…)`); setChip(`B · step ${bStep + 1} announced`);
+      clearTimeout(bTimer);
+      bTimer = setTimeout(() => { if (!bPaused) { s.act(); setChip(`B · step ${bStep + 1}`); human("step_executed", { step: bStep + 1 }); } }, 1800 / robot.state.speed);
+      renderLadder();
+    }
+    document.getElementById("bContinue").onclick = () => { human("continue", { step: bStep + 1 }); bNext(); };
+    document.getElementById("bClose").onclick = () => {
+      human("too_close", { distance: +robot.state.distance.toFixed(2) });
+      bCap = Math.max(-2.4, robot.state.distanceTarget - 0.9);
+      robot.setDistance(bCap); robot.moveArm("R", "handOnChest"); robot.expression("sorry"); robot.lean("back");
+      setTimeout(() => robot.lean("upright"), 1500);
+      say("Sorry. I'll stay here, and I won't come closer than this."); setChip("B · keeping distance"); renderLadder();
+    };
+    document.getElementById("bFast").onclick = () => {
+      human("too_fast", { speed: robot.state.speed });
+      robot.setSpeed(Math.max(0.35, robot.state.speed * 0.5)); robot.nod(1); robot.expression("neutral");
+      say("Okay. I'll move more slowly from now on."); setChip(`B · speed ×${robot.state.speed.toFixed(2)}`); renderLadder();
+    };
+    document.getElementById("bMuch").onclick = () => {
+      human("too_much", { step: bStep + 1 });
+      bPaused = true; clearTimeout(bTimer);
+      robot.state.gestures = []; robot.moveArm("L", "rest"); robot.moveArm("R", "rest"); robot.lean("upright");
+      robot.setDistance(Math.min(robot.state.distanceTarget, -1.8)); robot.expression("calm"); robot.setGlow(0.3, "blue"); robot.lookAt(0, 0.35);
+      say("Let's pause. Nothing else will happen until you choose Continue."); setChip("B · paused by you");
+      if (bStep >= 0) bStep--; renderLadder();
+    };
+    document.getElementById("suds").oninput = (e) => (document.getElementById("sudsVal").textContent = e.target.value);
+    document.getElementById("sudsRec").onclick = () => human("discomfort_rating", { step: bStep + 1, suds: +document.getElementById("suds").value });
+    concepts.B = {
+      enter() { bStep = -1; bCap = 1.8; robot.setDistance(-2.2); robot.settle(0.01); say("Hi. I'll show you what I do, one step at a time. You decide when we continue."); setChip("B · ready"); renderLadder();
+        const prox = new Proximity();
+        onSense = (out) => { faceGaze(out); const lm = out.pose?.landmarks?.[0]; const p = prox.update(out.t, shoulderWidth(lm)); if (p.leanBack && bStep >= 0) { human("lean_back_detected"); document.getElementById("bClose").click(); prox.calibrate(shoulderWidth(lm)); } };
+      },
+      next: bNext, tooClose: () => document.getElementById("bClose").click(), tooFast: () => document.getElementById("bFast").click(), tooMuch: () => document.getElementById("bMuch").click()
+    };
+
+    // =============== C · BREATH ===============
+    let cEst = new BreathEstimator(), cRunning = false, cT0 = 0, cSeries = [], cPhase = "idle", cRobotBpm = 14, cStartBpm = null, cPresses = [], mic = null, cLastLead = 0;
+    const cRes = document.getElementById("cResult");
+    const manualBpm = () => {
+      const iv = cPresses.slice(1).map((t, i) => t - cPresses[i]).filter((d) => d > 1.5 && d < 20).slice(-4);
+      if (iv.length < 2) return { bpm: null, quality: 0 };
+      const s = [...iv].sort((a, b) => a - b); const med = s[s.length >> 1];
+      return { bpm: +(60 / med).toFixed(1), quality: 1 };
+    };
+    const inhale = (down) => { if (!cRunning) return; if (down) { cPresses.push(robot.time); human("inhale_press"); } };
+    const btn = document.getElementById("inhaleBtn");
+    btn.onpointerdown = () => inhale(true);
+    addEventListener("keydown", (e) => { if (current === "C" && e.code === "Space" && !e.repeat) { e.preventDefault(); inhale(true); } });
+    function cUserBpm() {
+      const mode = document.getElementById("cMode").value;
+      if (mode === "manual") return manualBpm();
+      return cEst.estimate();
+    }
+    document.getElementById("cStart").onclick = async () => {
+      const mode = document.getElementById("cMode").value;
+      if (mode === "camera" && !sensing) { document.getElementById("camToggle").click(); }
+      if (mode === "mic") { const { createMicEnvelope } = await import("./sensing.js"); mic = await createMicEnvelope(); }
+      cEst = new BreathEstimator(); cPresses = []; cSeries = []; cRunning = true; cT0 = robot.time; cPhase = "measuring"; cStartBpm = null; cRobotBpm = 14; cLastLead = 0;
+      robot.breathe(cRobotBpm, 2.2, true); robot.expression("calm"); robot.setGlow(0.7, "blue"); robot.state.gazeLocked = true; robot.lookAt(0, 0.1);
+      say("Breathe normally. I'll find your rhythm first."); setChip("C · measuring"); human("session_start", { mode });
+    };
+    document.getElementById("cStop").onclick = () => cFinish();
+    function cFinish() {
+      if (!cRunning) return; cRunning = false; mic?.stop(); mic = null;
+      const confident = cSeries.filter((p) => p.user != null);
+      const end = confident.slice(-3).map((p) => p.user);
+      const endBpm = end.length ? +(end.reduce((a, b) => a + b, 0) / end.length).toFixed(1) : null;
+      const mid = confident.length ? confident[Math.floor(confident.length / 2)].user : null;
+      cRes.textContent = `Estimated breathing rate — before: ${cStartBpm ?? "not measured"} · during: ${mid ?? "–"} · after: ${endBpm ?? "not measured"} breaths/min. Duration ${(robot.time - cT0).toFixed(0)} s. (Interaction signal only.)`;
+      human("session_end", { before: cStartBpm, during: mid, after: endBpm });
+      robot.expression("happy"); robot.breathe(14, 1, false); robot.nod(1); say("Thank you for breathing with me."); setChip("C · finished");
+    }
+    function cTick(dt) {
+      if (!cRunning) return;
+      const t = robot.time - cT0;
+      if (document.getElementById("cMode").value === "mic" && mic) cEst.push(robot.time, mic.read());
+      const est = cUserBpm();
+      const userBpm = est.bpm && est.quality >= 0.6 ? est.bpm : null;
+      if (cPhase === "measuring" && userBpm) { cStartBpm = userBpm; cRobotBpm = userBpm; robot.breathe(cRobotBpm, 2.2, true); cPhase = "mirroring"; cLastLead = t; say("I'm breathing with you now."); setChip(`C · mirroring ${userBpm}`); human("mirror_start", { bpm: userBpm }); }
+      else if (cPhase === "mirroring" && t - cLastLead > 20) { cPhase = "leading"; cLastLead = t; say("Now follow me. I'll slow down a little."); setChip("C · leading"); }
+      else if (cPhase === "leading" && t - cLastLead > (3 * 60) / cRobotBpm) {
+        // Lead only when the user is following (within 2 bpm); never below 6 bpm.
+        if (userBpm && userBpm - cRobotBpm < 2 && cRobotBpm > 6.5) { cRobotBpm = +(cRobotBpm - 1).toFixed(1); robot.breathe(cRobotBpm, 2.2, true); human("robot_rate", { bpm: cRobotBpm, user: userBpm }); setChip(`C · leading ${cRobotBpm}`); }
+        cLastLead = t;
+      }
+      if (cSeries.length === 0 || t - cSeries.at(-1).t > 1) cSeries.push({ t, user: userBpm, robot: cRobotBpm });
+      drawChart();
+    }
+    function drawChart() {
+      const c = document.getElementById("cChart"), x = c.getContext("2d"); x.clearRect(0, 0, c.width, c.height);
+      const T = Math.max(60, cSeries.at(-1)?.t ?? 60); const Y = (v) => c.height - ((v - 4) / 20) * (c.height - 16) - 8;
+      x.font = "11px system-ui"; x.fillStyle = "#666"; for (const v of [6, 10, 14, 18, 22]) { x.fillText(v, 2, Y(v) + 3); }
+      const line = (key, color) => { x.strokeStyle = color; x.lineWidth = 2.5; x.beginPath(); let on = false; for (const p of cSeries) { if (p[key] == null) { on = false; continue; } const px = 24 + (p.t / T) * (c.width - 30); on ? x.lineTo(px, Y(p[key])) : x.moveTo(px, Y(p[key])); on = true; } x.stroke(); };
+      line("robot", "#2d6b9a"); line("user", "#28744b");
+      x.fillStyle = "#2d6b9a"; x.fillText("robot", c.width - 90, 14); x.fillStyle = "#28744b"; x.fillText("you (estimated)", c.width - 50 - 40, 28);
+    }
+    concepts.C = {
+      enter() { tick = cTick; say("When you're ready, start a session. I'll match your breathing, then slow down a little."); setChip("C · ready");
+        onSense = (out) => { if (cRunning && document.getElementById("cMode").value === "camera") { const s = shoulderBreathSignal(out.pose?.landmarks?.[0]); cEst.push(out.t / 1000, s); } };
+      },
+      press: () => inhale(true), start: () => document.getElementById("cStart").click(), finish: cFinish
+    };
+
+    // =============== D · MIRROR ===============
+    let dReps = 0, dUp = false, dPeak = 0;
+    const dRep = (elev) => {
+      if (!dUp && elev > 60) { dUp = true; dPeak = elev; }
+      if (dUp) dPeak = Math.max(dPeak, elev);
+      if (dUp && elev < 30) { dUp = false; dReps++; human("rep", { n: dReps, peakElevationDeg: +dPeak.toFixed(0) }); robot.nod(1); say(dReps % 2 ? "Good." : "เก่งมาก (well done)"); document.getElementById("dReps").textContent = `Reps: ${dReps} · last peak ${dPeak.toFixed(0)}°`; }
+    };
+    const dirsFromAngles = (elevDeg, flexDeg, robotSide) => {
+      const s = robotSide === "L" ? 1 : -1, e = (elevDeg * Math.PI) / 180, f = (flexDeg * Math.PI) / 180;
+      const upper = [Math.sin(e) * s, -Math.cos(e), 0.12];
+      // Elbow bends the forearm forward/up relative to the upper arm.
+      const fore = [upper[0] * Math.cos(f), upper[1] * Math.cos(f) + Math.sin(f) * 0.6, upper[2] * Math.cos(f) + Math.sin(f) * 0.8];
+      return { upper, fore };
+    };
+    const dOtherRobotSide = () => (document.getElementById("dSide").value === "left" ? "R" : "L"); // user's other arm, mirror display
+    const dManual = () => {
+      const elev = +document.getElementById("dElev").value, flex = +document.getElementById("dFlex").value;
+      document.getElementById("dElevVal").textContent = `${elev}°`; document.getElementById("dFlexVal").textContent = `${flex}°`;
+      const side = dOtherRobotSide(); const d = dirsFromAngles(elev, flex, side);
+      robot.setArmDirections(side, d.upper, d.fore); dRep(elev);
+    };
+    ["dElev", "dFlex"].forEach((id) => (document.getElementById(id).oninput = dManual));
+    document.getElementById("dDemo").onclick = () => {
+      human("demo_requested"); say("Watch: raise your arm out to the side, then lower it.");
+      const side = dOtherRobotSide(); let t = 0;
+      const demo = setInterval(() => { t += 0.05; const elev = 85 - 80 * Math.cos(t * 1.6); const d = dirsFromAngles(elev, 10, side); robot.setArmDirections(side, d.upper, d.fore); if (t > 4) clearInterval(demo); }, 50);
+    };
+    concepts.D = {
+      enter() { say("Move one arm. I'll show it as your other arm, like a mirror."); setChip("D · ready"); dReps = 0; robot.moveArm("L", "relaxed"); robot.moveArm("R", "relaxed"); dManual();
+        onSense = (out) => {
+          faceGaze(out);
+          if (!document.getElementById("dCam").checked) return;
+          const w = out.pose?.worldLandmarks?.[0]; const healthy = document.getElementById("dSide").value;
+          const tgt = mirrorTherapyTarget(w, healthy);
+          if (!tgt) { setChip("D · arm not visible"); return; }
+          robot.setArmDirections(tgt.robotSide, tgt.upper, tgt.fore);
+          const a = armAngles(userArmDirections(w, healthy)); setChip(`D · elev ${a.shoulderElevationDeg}° elbow ${a.elbowDeg}°`); dRep(a.shoulderElevationDeg);
+        };
+      },
+      setAngles: (e, f) => { document.getElementById("dElev").value = e; document.getElementById("dFlex").value = f; dManual(); }
+    };
+
+    // =============== E · WAI-FIRST ===============
+    let eGreeted = false, eDist = -2.0, eDetector = new WaiDetector();
+    const eState = document.getElementById("eState");
+    const eSaved = (() => { try { return JSON.parse(localStorage.getItem("hriSpikeComfort") ?? "null"); } catch { return null; } })();
+    function eWaiReturned(source) {
+      if (eGreeted) return;
+      eGreeted = true; human("wai_received", { source });
+      robot.state.gazeLocked = true; robot.lookAt(0, 0.25);
+      robot.moveArm("L", "wai"); robot.moveArm("R", "wai"); robot.expression("calm");
+      setTimeout(() => robot.bow(0.38, 1.8), 600);
+      setTimeout(() => { robot.moveArm("L", "relaxed"); robot.moveArm("R", "relaxed"); robot.expression("happy"); robot.lookAt(0, 0); robot.state.gazeLocked = false;
+        const target = eSaved?.distance ?? -0.4; eDist = target; robot.setDistance(eDist);
+        say(eSaved ? "สวัสดีครับ — welcome back. I'll stand where you were comfortable last time." : "สวัสดีครับ. I'll come a little closer. Tell me how this feels.");
+        setChip(eSaved ? "E · remembered distance" : "E · approaching"); }, 3000);
+      say("สวัสดีครับ"); setChip("E · returning wai");
+    }
+    document.getElementById("eWai").onclick = () => eWaiReturned("button");
+    document.getElementById("eReset").onclick = () => concepts.E.enter();
+    const eAdjust = (kind) => {
+      if (!eGreeted) { say("I'm waiting for your greeting first."); robot.nod(1); return; }
+      human(`proxemics_${kind}`, { distance: +robot.state.distanceTarget.toFixed(2) });
+      if (kind === "too_far") { eDist = Math.min(1.4, eDist + 0.6); robot.setDistance(eDist); robot.moveArm("R", "offer"); robot.expression("happy"); setTimeout(() => robot.moveArm("R", "relaxed"), 1600); say("I'll come a little closer."); setChip("E · TOO FAR → closer"); }
+      if (kind === "too_close") { eDist = Math.max(-2.6, eDist - 0.7); robot.setDistance(eDist); robot.moveArm("R", "handOnChest"); robot.expression("sorry"); robot.lean("back"); setTimeout(() => { robot.lean("upright"); robot.moveArm("R", "relaxed"); robot.expression("neutral"); }, 1800); say("Sorry — I'll step back."); setChip("E · TOO CLOSE → back"); }
+      if (kind === "ok") { robot.nod(2); robot.expression("happy"); robot.setGlow(0.9, "teal"); try { localStorage.setItem("hriSpikeComfort", JSON.stringify({ distance: eDist })); } catch {} say("Great. I'll remember this distance."); setChip("E · COMFORTABLE (saved)"); }
+      eState.textContent = `Robot distance setting: ${eDist.toFixed(2)} (higher = closer)`;
+    };
+    document.getElementById("eFar").onclick = () => eAdjust("too_far");
+    document.getElementById("eOk").onclick = () => eAdjust("ok");
+    document.getElementById("eNear").onclick = () => eAdjust("too_close");
+    concepts.E = {
+      enter() { eGreeted = false; eDist = -2.0; eDetector = new WaiDetector(); robot.setDistance(eDist);
+        // Waiting posture: still, eyes lowered slightly; it does not wave or stare.
+        robot.state.gazeLocked = true; robot.lookAt(0, 0.35); robot.moveArm("L", "relaxed"); robot.moveArm("R", "relaxed"); robot.expression("neutral");
+        say("…"); setChip("E · waiting for your greeting"); eState.textContent = eSaved ? `Saved comfort distance: ${eSaved.distance.toFixed(2)}` : "No saved distance yet.";
+        const prox = new Proximity();
+        onSense = (out) => {
+          const lm = out.pose?.landmarks?.[0];
+          if (!eGreeted && lm) { const s = eDetector.update(out.t, classifyWai(lm)); if (s.state === "rising") setChip(`E · wai? ${Math.round(s.progress * 100)}%`); if (s.state === "fired") eWaiReturned("camera"); }
+          if (eGreeted) { faceGaze(out); const p = prox.update(out.t, shoulderWidth(lm)); if (p.leanBack) { human("lean_back_detected"); eAdjust("too_close"); prox.calibrate(shoulderWidth(lm)); } }
+        };
+      },
+      wai: () => eWaiReturned("button"), adjust: eAdjust
+    };
+
+    document.getElementById("dl").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(log, null, 1)], { type: "application/json" })); a.download = "hri-spike-log.json"; a.click(); };
+    window.spike = { robot, stage, concepts, show, log, facts };
+    show("A");
+    window.ready = true;
+  </script>
+</body>
+</html>

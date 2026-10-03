@@ -1,0 +1,15 @@
+{
+  "name": "hri-feasibility-spike",
+  "private": true,
+  "description": "Isolated HRI feasibility spike. Not part of the Next.js app. Delete this folder to remove it.",
+  "type": "module",
+  "scripts": {
+    "models": "node fetch-models.mjs",
+    "serve": "cd ../.. && python3 -m http.server 8787",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "three": "0.185.1",
+    "@mediapipe/tasks-vision": "1.0.1"
+  }
+}
