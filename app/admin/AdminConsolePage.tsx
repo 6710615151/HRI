@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getTranslation } from "@/lib/translations";
+import { isAdmin as hasAdminSession } from "@/lib/auth";
 import {
   updateSubmissionStatus,
   upsertContributionAction,
@@ -47,14 +48,13 @@ export default async function AdminConsolePage({ searchParams }: { searchParams:
   const cookieStore = await cookies();
   const lang = (cookieStore.get("lang")?.value || "en") as "en" | "th";
   const t = getTranslation(lang);
-  const currentRole = cookieStore.get("user_role")?.value;
-  const isAdmin = currentRole === "ADMIN";
+  const isAdmin = await hasAdminSession();
 
   const localT = {
     en: {
       denied: "Access Denied",
       deniedDesc: "You must have the ADMIN role to review submissions or edit CMS content.",
-      goProfile: "Go to Profile & Login as Admin",
+      goProfile: "Sign in as administrator",
       addNew: "Add new record",
       save: "Save record",
       create: "Create record",
@@ -70,7 +70,7 @@ export default async function AdminConsolePage({ searchParams }: { searchParams:
     th: {
       denied: "ปฏิเสธการเข้าถึง",
       deniedDesc: "คุณต้องมีบทบาทผู้ดูแลระบบ (ADMIN) เพื่อแก้ไขข้อมูล CMS",
-      goProfile: "ไปที่โปรไฟล์และเข้าสู่ระบบในฐานะผู้ดูแล",
+      goProfile: "เข้าสู่ระบบผู้ดูแล",
       addNew: "เพิ่มรายการใหม่",
       save: "บันทึกรายการ",
       create: "สร้างรายการ",
@@ -91,7 +91,7 @@ export default async function AdminConsolePage({ searchParams }: { searchParams:
         <div style={{ maxWidth: "560px", margin: "40px auto", textAlign: "center" }} className="panel">
           <h1 style={{ color: "var(--danger)" }}>{localT.denied}</h1>
           <p className="muted" style={{ margin: "14px 0" }}>{localT.deniedDesc}</p>
-          <Link href="/profile" className="button primary">{localT.goProfile}</Link>
+          <Link href="/admin-login?from=/admin" className="button primary">{localT.goProfile}</Link>
         </div>
       </div>
     );

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth";
 
 export type ContributionMapPoint = {
   id: string;
@@ -267,6 +268,7 @@ export async function fetchContributionClusters(): Promise<ContributionMapPoint[
 }
 
 export async function reanalyzeClustersWithGemini() {
+  await requireAdmin();
   try {
     await analyzeClustersWithGemini();
   } catch (e) {

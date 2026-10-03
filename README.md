@@ -265,15 +265,19 @@ Set these variables in your Vercel project settings:
 ```env
 DATABASE_URL="prisma+postgres://accelerate.prisma-data.net/?api_key=..."
 NEXT_PUBLIC_APP_URL="https://your-project.vercel.app"
-ADMIN_BASIC_USER="creativelab.co.th@gmail.com"
+NEXT_PUBLIC_SITE_URL="https://your-project.vercel.app"
+ADMIN_BASIC_USER="admin@example.com"
 ADMIN_BASIC_PASSWORD="use-a-strong-password"
+ADMIN_SESSION_SECRET="random-32-byte-secret"
 YOUTUBE_API_KEY="your-api-key"
 GITHUB_TOKEN="your-token"
 GEMINI_API_KEY="your-gemini-api-key"
 ```
 
 > [!IMPORTANT]
-> - 🔒 Production endpoints `/admin/*`, `/data-pulls`, and `/api/ingest/*` are protected with Basic Auth using `ADMIN_BASIC_USER` and `ADMIN_BASIC_PASSWORD`. Keep credentials safe!
+> - 🔒 `/admin/*` and `/data-pulls` require an administrator to sign in at `/admin-login` with `ADMIN_BASIC_USER` / `ADMIN_BASIC_PASSWORD`. The session is an HMAC-signed, HttpOnly cookie (signed with `ADMIN_SESSION_SECRET`, or the admin password if unset) that expires after 8 hours. Every server action that changes data re-checks it.
+> - 🔒 `/api/ingest/*` and `/api/export` use Basic Auth with the same credentials. There are no built-in default credentials: if the variables are unset, admin access is disabled.
+> - 🌐 `NEXT_PUBLIC_SITE_URL` sets canonical URLs, the sitemap and Open Graph links.
 > - ⚙️ The Vercel build command is configured to run `pnpm vercel-build` which automatically handles schema generation. Do **not** run `db:push` inside the Vercel build phase.
 
 ---

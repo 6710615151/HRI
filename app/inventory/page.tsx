@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getTranslation } from "@/lib/translations";
+import { isAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,9 @@ export const metadata: Metadata = {
 
 export default async function InventoryPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  const isPublic = params.mode === "public";
+  // Operator mode shows serial numbers, locations and repair logs: administrators only.
+  const canOperate = await isAdmin();
+  const isPublic = !canOperate || params.mode === "public";
   
   const cookieStore = await cookies();
   const lang = (cookieStore.get("lang")?.value || "en") as "en" | "th";
@@ -107,12 +110,14 @@ export default async function InventoryPage({ searchParams }: { searchParams: Se
           <p className="muted">{t.inventoryDesc}</p>
         </div>
         <div className="toolbar">
-          <Link 
-            className={`button ${!isPublic ? "primary" : ""}`} 
-            href="/inventory?mode=operator"
-          >
-            {localT.opMode}
-          </Link>
+          {canOperate && (
+            <Link
+              className={`button ${!isPublic ? "primary" : ""}`}
+              href="/inventory?mode=operator"
+            >
+              {localT.opMode}
+            </Link>
+          )}
           <Link 
             className={`button ${isPublic ? "primary" : ""}`} 
             href="/inventory?mode=public"
