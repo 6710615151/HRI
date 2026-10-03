@@ -102,6 +102,7 @@ model RobotModel {
   lastVerifiedAt    DateTime?
   contributions     Contribution[]
   inventory         OwnedInventory[]
+  hriSessions       HriSession[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -248,5 +249,42 @@ model OwnedInventory {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
+  @@index([robotModelId])
+}
+
+// ---------------------------------------------------------------------------
+// HRI Wellness Living Lab: comfort passports and recorded human-robot encounters.
+// A passport stores interaction preferences learned in one encounter so any robot
+// in the atlas can apply them. No camera frames or personal identifiers are stored.
+
+model HriPassport {
+  id               String       @id @default(cuid())
+  code             String       @unique
+  nickname         String?
+  greeting         String       @default("wai")
+  comfortDistance  Float
+  speed            Float        @default(1)
+  gaze             String       @default("soft")
+  voice            Boolean      @default(true)
+  language         String       @default("th")
+  sessions         HriSession[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model HriSession {
+  id            String       @id @default(cuid())
+  protocol      String
+  passportId    String?
+  passport      HriPassport? @relation(fields: [passportId], references: [id], onDelete: SetNull)
+  robotModelId  String?
+  robotModel    RobotModel?  @relation(fields: [robotModelId], references: [id], onDelete: SetNull)
+  inputMode     String       @default("buttons")
+  eventsJson    Json         @default("[]")
+  summaryJson   Json         @default("{}")
+  startedAt     DateTime     @default(now())
+  endedAt       DateTime?
+
+  @@index([protocol])
   @@index([robotModelId])
 }

@@ -2,6 +2,7 @@ export const translations = {
   en: {
     brand: "Thailand Humanoid Atlas",
     overview: "Overview",
+    livingLab: "Living Lab",
     dashboard: "Dashboard",
     dataPulls: "Data Pulls",
     map: "Map",
@@ -90,6 +91,7 @@ export const translations = {
   th: {
     brand: "คลังข้อมูลหุ่นยนต์ฮิวแมนนอยด์ไทย",
     overview: "ภาพรวม",
+    livingLab: "Living Lab",
     dashboard: "แดชบอร์ด",
     dataPulls: "ดึงข้อมูล API",
     map: "แผนที่",

@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   Network,
   Bot,
-  CircleUserRound
+  HeartHandshake
 } from "lucide-react";
 import { getTranslation } from "@/lib/translations";
 
@@ -23,7 +23,7 @@ export default function MobileTabNav({ currentLang = "en" }: MobileTabNavProps) 
     { href: "/dashboard", label: t.dashboard, icon: LayoutDashboard },
     { href: "/network", label: t.network, icon: Network },
     { href: "/robots", label: t.robots, icon: Bot },
-    { href: "/profile", label: t.profile, icon: CircleUserRound }
+    { href: "/living-lab", label: t.livingLab, icon: HeartHandshake }
   ];
 
   return (

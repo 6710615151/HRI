@@ -12,6 +12,7 @@ import {
   Database,
   Facebook,
   FolderOpen,
+  HeartHandshake,
   Github,
   Globe,
   Play,
@@ -758,7 +759,11 @@ export default async function OverviewPage() {
         </div>
 
         <div className="actions">
-          <Link className="button primary" href="/data-pulls">
+          <Link className="button primary" href="/living-lab">
+            <HeartHandshake size={15} />
+            <span>🤝</span> {lang === "th" ? "เข้า Living Lab" : "Enter the Living Lab"}
+          </Link>
+          <Link className="button" href="/data-pulls">
             <Play size={14} fill="currentColor" />
             <span style={{ fontSize: "10px" }}>▶</span> {t.runDataPull}
           </Link>

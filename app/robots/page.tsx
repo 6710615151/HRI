@@ -31,7 +31,12 @@ export const metadata: Metadata = {
     description: "Comprehensive catalog of humanoid, social, and service robot models deployed, researched, or active in Thailand. Track specifications, developers, and source links.",
     images: ["/logo.png"]
   }
-};type SourceLike = {
+};
+
+// Care, health and companion robots can be met in the Living Lab with an HRI Passport.
+const CARE_TYPES = /hospital|medical|elder|care|rehab|therapy|telepresence|companion|assist|service/i;
+
+type SourceLike = {
   title: string;
   url: string;
   platform: string | null;
@@ -186,6 +191,13 @@ export default async function RobotsPage() {
               <p><span className="badge">{robot.robotType}</span> <span className="badge">{robot.thailandStatus}</span></p>
               <p><strong>{robot.manufacturer ?? robot.developerOrg ?? "Unknown developer"}</strong><br />{robot.primaryUseCase ?? "Use case unclassified"}</p>
               {robot.officialUrl && <a href={robot.officialUrl} target="_blank" rel="noopener noreferrer">Source</a>}
+              {CARE_TYPES.test(robot.robotType) && (
+                <p style={{ marginTop: 8 }}>
+                  <a href={`/living-lab/meet?robot=${robot.id}`} style={{ fontWeight: 700 }}>
+                    {lang === "th" ? "🤝 พบหุ่นตัวนี้ด้วย HRI Passport" : "🤝 Meet with your HRI Passport"}
+                  </a>
+                </p>
+              )}
             </article>
           );
         })}

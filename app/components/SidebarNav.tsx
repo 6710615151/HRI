@@ -16,7 +16,8 @@ import {
   UsersRound,
   Home,
   MapPinned,
-  Package
+  Package,
+  HeartHandshake
 } from "lucide-react";
 import { getTranslation } from "@/lib/translations";
 
@@ -30,6 +31,7 @@ export default function SidebarNav({ currentLang = "en" }: SidebarNavProps) {
 
   const navItems = [
     { href: "/", label: t.overview, icon: Home },
+    { href: "/living-lab", label: t.livingLab, icon: HeartHandshake },
     { href: "/dashboard", label: t.dashboard, icon: LayoutDashboard },
     { href: "/data-pulls", label: t.dataPulls, icon: Inbox },
     { href: "/map", label: t.map, icon: MapPinned },
@@ -49,7 +51,7 @@ export default function SidebarNav({ currentLang = "en" }: SidebarNavProps) {
     <nav className="nav" aria-label="Primary">
       {navItems.map((item) => {
         const Icon = item.icon;
-        const isActive = item.href === "/admin" ? pathname.startsWith("/admin") : pathname === item.href;
+        const isActive = item.href === "/admin" || item.href === "/living-lab" ? pathname.startsWith(item.href) : pathname === item.href;
         return (
           <Link 
             key={item.href} 
